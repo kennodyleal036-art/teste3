@@ -1,0 +1,182 @@
+--[[
+	Script: GUI Profissional - Espólios Mágicos
+	Executor: Delta Executor (ou qualquer outro)
+	Função: Dinheiro Infinito (ativa/desativa)
+	Características:
+		- Interface moderna e responsiva
+		- Arrastável (drag)
+		- Animações suaves (Tween)
+		- Botão ON/OFF com estado visual claro
+		- Tratamento de erros
+		- Persiste após renascer
+		- Código limpo e comentado
+]]
+
+-- Serviços
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Jogador local
+local player = Players.LocalPlayer
+if not player then
+	warn("Jogador local não encontrado. Script abortado.")
+	return
+end
+
+-- Variáveis de estado
+local gui = nil
+local isOpen = false
+local isDragging = false
+local dragStart, dragOffset
+local infiniteMoneyActive = false
+local moneyLoopConnection = nil
+local playerGui
+
+-- Configurações visuais
+local COLORS = {
+	Background = Color3.fromRGB(25, 25, 35),
+	TitleBar = Color3.fromRGB(40, 48, 60),
+	ButtonOn = Color3.fromRGB(0, 200, 100),
+	ButtonOff = Color3.fromRGB(200, 50, 50),
+	TextPrimary = Color3.fromRGB(240, 240, 250),
+	TextSecondary = Color3.fromRGB(180, 180, 190),
+	Border = Color3.fromRGB(60, 60, 75),
+	Glow = Color3.fromRGB(0, 150, 255),
+}
+
+-- Função para criar a GUI principal
+local function createGUI()
+	-- Se já existe, remove
+	if gui and gui.Parent then
+		gui:Destroy()
+	end
+
+	playerGui = player:WaitForChild("PlayerGui")
+
+	-- ScreenGui principal
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "EspoliosMagicosGUI"
+	screenGui.Parent = playerGui
+	screenGui.ResetOnSpawn = false -- persiste após morrer
+	gui = screenGui
+
+	-- Frame principal
+	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
+	mainFrame.Size = UDim2.new(0, 320, 0, 240)
+	mainFrame.Position = UDim2.new(0.5, -160, 0.4, -120)
+	mainFrame.BackgroundColor3 = COLORS.Background
+	mainFrame.BorderSizePixel = 0
+	mainFrame.ClipsDescendants = true
+	mainFrame.Parent = screenGui
+
+	-- Sombras e bordas (efeito moderno)
+	local uiCorner = Instance.new("UICorner")
+	uiCorner.CornerRadius = UDim.new(0, 12)
+	uiCorner.Parent = mainFrame
+
+	local shadow = Instance.new("ImageLabel")
+	shadow.Name = "Shadow"
+	shadow.Size = UDim2.new(1, 20, 1, 20)
+	shadow.Position = UDim2.new(0, -10, 0, -10)
+	shadow.BackgroundTransparency = 1
+	shadow.Image = "rbxassetid://1316045217"
+	shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+	shadow.ImageTransparency = 0.5
+	shadow.ScaleType = Enum.ScaleType.Slice
+	shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+	shadow.ZIndex = -1
+	shadow.Parent = mainFrame
+
+	-- Barra de título
+	local titleBar = Instance.new("Frame")
+	titleBar.Name = "TitleBar"
+	titleBar.Size = UDim2.new(1, 0, 0, 40)
+	titleBar.BackgroundColor3 = COLORS.TitleBar
+	titleBar.BorderSizePixel = 0
+	titleBar.Parent = mainFrame
+
+	local titleCorner = Instance.new("UICorner")
+	titleCorner.CornerRadius = UDim.new(0, 12)
+	titleCorner.Parent = titleBar
+
+	-- Para preencher o canto inferior da barra (cortado)
+	local fillBottom = Instance.new("Frame")
+	fillBottom.Name = "FillBottom"
+	fillBottom.Size = UDim2.new(1, 0, 0, 6)
+	fillBottom.Position = UDim2.new(0, 0, 1, -6)
+	fillBottom.BackgroundColor3 = COLORS.TitleBar
+	fillBottom.BorderSizePixel = 0
+	fillBottom.Parent = titleBar
+
+	-- Título
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Name = "TitleLabel"
+	titleLabel.Size = UDim2.new(1, -50, 1, 0)
+	titleLabel.Position = UDim2.new(0, 15, 0, 0)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text = "Espólios Mágicos"
+	titleLabel.TextColor3 = COLORS.TextPrimary
+	titleLabel.TextSize = 16
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.Parent = titleBar
+
+	-- Botão de fechar (X)
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "CloseButton"
+	closeButton.Size = UDim2.new(0, 30, 0, 30)
+	closeButton.Position = UDim2.new(1, -35, 0.5, -15)
+	closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	closeButton.Text = "✕"
+	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeButton.TextSize = 16
+	closeButton.Font = Enum.Font.GothamBold
+	closeButton.BorderSizePixel = 0
+	closeButton.Parent = titleBar
+
+	local closeCorner = Instance.new("UICorner")
+	closeCorner.CornerRadius = UDim.new(0, 6)
+	closeCorner.Parent = closeButton
+
+	-- Conteúdo principal (abaixo da barra)
+	local contentFrame = Instance.new("Frame")
+	contentFrame.Name = "ContentFrame"
+	contentFrame.Size = UDim2.new(1, -20, 1, -50)
+	contentFrame.Position = UDim2.new(0, 10, 0, 45)
+	contentFrame.BackgroundTransparency = 1
+	contentFrame.Parent = mainFrame
+
+	-- Label de descrição
+	local descLabel = Instance.new("TextLabel")
+	descLabel.Name = "DescLabel"
+	descLabel.Size = UDim2.new(1, 0, 0, 30)
+	descLabel.Position = UDim2.new(0, 0, 0, 0)
+	descLabel.BackgroundTransparency = 1
+	descLabel.Text = "Dinheiro Infinito"
+	descLabel.TextColor3 = COLORS.TextPrimary
+	descLabel.TextSize = 18
+	descLabel.Font = Enum.Font.GothamBold
+	descLabel.TextXAlignment = Enum.TextXAlignment.Center
+	descLabel.Parent = contentFrame
+
+	-- Frame dos botões ON/OFF
+	local toggleFrame = Instance.new("Frame")
+	toggleFrame.Name = "ToggleFrame"
+	toggleFrame.Size = UDim2.new(0, 200, 0, 50)
+	toggleFrame.Position = UDim2.new(0.5, -100, 0, 40)
+	toggleFrame.BackgroundColor3 = COLORS.Border
+	toggleFrame.BorderSizePixel = 0
+	toggleFrame.Parent = contentFrame
+
+	local toggleCorner = Instance.new("UICorner")
+	toggleCorner.CornerRadius = UDim.new(0, 25)
+	toggleCorner.Parent = toggleFrame
+
+	-- Botão ON
+	local onButton = Instance.new("TextButton")
+	onButton.Name = "OnButton"
+	onButton.Size = UDim2.new(0.5, -2, 1, -4)
+	on
